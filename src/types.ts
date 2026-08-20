@@ -14,6 +14,37 @@ export type StepName = (typeof STEP_NAMES)[number];
 export type StepStatus = "pending" | "running" | "succeeded" | "failed";
 export type RunStatus = "pending" | "running" | "succeeded" | "failed";
 export type EvidenceKind = "viewpoint" | "quote" | "case" | "method" | "style";
+export type EvidenceLevel = "可比较真实数据" | "真实数据候选" | "已发现·数据待补" | "不可入库";
+
+export interface SearchItem {
+  source: string;
+  sourceId: string;
+  url: string;
+  title: string;
+  author?: string;
+  publishedAt?: string;
+  collectedAt: string;
+  metrics: {
+    views?: number;
+    likes?: number;
+    comments?: number;
+    favorites?: number;
+  };
+  rawText?: string;
+  rawPayloadPath?: string;
+}
+
+export interface SearchInput {
+  keyword: string;
+  startAt?: string;
+  endAt?: string;
+  limit: number;
+  runId: string;
+}
+
+export interface SearchProvider {
+  search(input: SearchInput): Promise<SearchItem[]>;
+}
 
 export interface RunInput {
   keyword?: string;
@@ -29,7 +60,11 @@ export interface CandidateSource {
   readCount: number | null;
   likeCount: number | null;
   commentCount: number | null;
-  sourceType: "demo" | "rss" | "knowledge";
+  favoriteCount?: number | null;
+  collectedAt?: string;
+  evidenceLevel?: EvidenceLevel;
+  rawPayloadPath?: string;
+  sourceType: "demo" | "rss" | "tikhub" | "knowledge";
   summary?: string;
 }
 

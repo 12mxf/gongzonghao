@@ -80,7 +80,11 @@ export class PipelineOrchestrator {
 
     if (name === "source_search") {
       const query = String(run.keyword || run.manualTitle || "");
-      const sources = await this.deps.search.search(query);
+      const sources = await this.deps.search.search({
+        keyword: query,
+        limit: this.deps.config.searchResultLimit,
+        runId,
+      });
       this.deps.db.saveSources(runId, sources);
       return { query, count: sources.length, sources };
     }

@@ -5,7 +5,7 @@
 ## 已实现的最小可用版
 
 1. 输入关键词，也可以手动指定标题。
-2. `demo` 模式读取可复现的演示候选；`rss` 模式只读取你在 `.env` 明确配置的公开或已授权 RSS。
+2. `demo` 模式读取可复现的演示候选；`rss` 模式读取明确配置的公开/授权 RSS；`tikhub` 模式用搜狗微信公开搜索发现候选，再由 TikHub 官方接口解析永久链接并补全公众号指标。
 3. 保存来源 URL、标题、作者、时间及可获得的阅读/点赞/评论指标；拿不到的指标保存为 `null`，不会猜测。
 4. 对 URL 和相似标题去重，综合公开指标与时效排序，生成选题卡。
 5. 从 `data/raw/` 检索观点、原话、案例、方法卡和写作风格五类证据。
@@ -66,6 +66,24 @@ PUBLIC_RSS_FEEDS=https://example.com/feed.xml,https://example.org/rss
 ```
 
 RSS 适配器只读取明确配置的地址，不绕过登录、不抓取受限页面。RSS 没有公开互动指标时，对应字段保持空值。
+
+使用 TikHub 公众号数据补全：
+
+```dotenv
+DATA_SOURCE_MODE=tikhub
+DATA_PROVIDER_KEY=你的TikHub密钥
+TIKHUB_BASE_URL=https://api.tikhub.dev
+SEARCH_RESULT_LIMIT=20
+SOGOU_MAX_PAGES=3
+```
+
+这里是两段式证据链：搜狗微信公开结果负责“按关键词发现”，TikHub 负责“搜狗链接转公众号永久链接、文章详情、阅读互动指标”。TikHub 当前公开的公众号 OpenAPI 没有任意关键词搜索接口，因此项目不会把 URL 解析接口伪装成搜索接口。中国大陆按官方说明使用 `api.tikhub.dev`，其他地区可改为 `https://api.tikhub.io`。
+
+每次搜索的原始搜狗页面、TikHub 链接解析、详情和指标响应都会保存到 `output/<runId>/raw/`。候选项按规范化 URL 和 `sourceId` 去重，指标不足时证据等级明确显示“已发现·数据待补”，不会用模型分数冒充真实热度。
+
+注意：切换到 `DATA_SOURCE_MODE=tikhub` 后，每篇候选通常会调用 TikHub 的链接解析、详情和阅读指标接口，可能产生费用。默认仍是 `demo`，测试使用模拟响应，不会消耗余额。
+
+核验依据：[TikHub 官方 Swagger](https://api.tikhub.io)、[官方 SDK 接口索引](https://github.com/TikHub/TikHub-API-Python-SDK/blob/main/docs/reference.md)、[官方 OpenAPI 文件](https://github.com/TikHub/TikHub-API-Python-SDK/blob/main/spec/openapi.json)。当前实现对应官方 OpenAPI `V5.3.2` 的公众号 Web 接口。
 
 ### 本地知识库
 
@@ -193,13 +211,25 @@ npm run build
 npm run check
 ```
 
-当前测试覆盖：相似标题去重、公开指标排序、五类 RAG 召回、完整演示流水线、本地 HTML、mock `media_id`、步骤幂等，以及重启后 SQLite 历史任务恢复。
+当前测试覆盖：相似标题去重、公开指标排序、TikHub 正常响应/空结果/429 限流/字段缺失、五类 RAG 召回、完整演示流水线、本地 HTML、mock `media_id`、步骤幂等，以及重启后 SQLite 历史任务恢复。
 
 ## 常见错误
 
 ### `本地知识库没有可检索语料`
 
 运行 `npm run demo`，或把带内容的 `.md` / `.txt` 文件放到 `data/raw/`。
+
+### TikHub 搜索没有结果
+
+先查看 `output/<runId>/raw/sogou-page-1.html`。如果页面为空或出现验证码，说明搜狗微信暂时限流；稍后单独重跑 `source_search`。如果已发现文章但 TikHub 返回失败，查看结构化日志中的 HTTP 状态和对应 `raw/*.json`。
+
+### TikHub 返回 `401` / `403`
+
+确认 `DATA_PROVIDER_KEY` 只填写在本地 `.env`，且未包含多余引号或空格。密钥通过 `Authorization: Bearer ...` 请求头发送，不会写进日志。
+
+### TikHub 返回 `429` 或 `5xx`
+
+程序会对 429、5xx 和超时做最多 `HTTP_MAX_RETRIES` 次指数退避重试。仍失败时该步骤会保留失败原因，之后只需重跑 `source_search`。
 
 ### 图片步骤显示 `PAUSED`
 

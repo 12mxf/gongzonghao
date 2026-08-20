@@ -4,6 +4,7 @@ export interface HttpClientOptions {
   timeoutMs: number;
   maxRetries: number;
   logger: StructuredLogger;
+  retryBaseDelayMs?: number;
 }
 
 export class HttpClient {
@@ -30,7 +31,7 @@ export class HttpClient {
           error: error instanceof Error ? error.message : String(error),
         });
         if (attempt < this.options.maxRetries) {
-          await new Promise((resolve) => setTimeout(resolve, 200 * 2 ** (attempt - 1)));
+          await new Promise((resolve) => setTimeout(resolve, (this.options.retryBaseDelayMs ?? 200) * 2 ** (attempt - 1)));
         }
       }
     }

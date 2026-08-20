@@ -17,10 +17,24 @@ export class WorkbenchDatabase {
     this.db.pragma("foreign_keys = ON");
     this.db.pragma("journal_mode = WAL");
     for (const statement of schemaStatements) this.db.prepare(statement).run();
+    this.ensureSourceColumns();
     this.db.pragma("optimize");
   }
 
   close() { this.db.close(); }
+
+  private ensureSourceColumns() {
+    const existing = new Set((this.db.prepare("PRAGMA table_info(sources)").all() as Array<{ name: string }>).map((column) => column.name));
+    const additions: Array<[string, string]> = [
+      ["favorite_count", "INTEGER"],
+      ["collected_at", "TEXT"],
+      ["evidence_level", "TEXT"],
+      ["raw_payload_path", "TEXT"],
+    ];
+    for (const [name, type] of additions) {
+      if (!existing.has(name)) this.db.exec(`ALTER TABLE sources ADD COLUMN ${name} ${type}`);
+    }
+  }
 
   createRun(input: RunInput) {
     const id = `${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${randomUUID().slice(0, 8)}`;
@@ -70,6 +84,8 @@ export class WorkbenchDatabase {
         id: source.id, url: source.url, title: source.title, author: source.author,
         publishedAt: source.published_at, readCount: source.read_count,
         likeCount: source.like_count, commentCount: source.comment_count,
+        favoriteCount: source.favorite_count, collectedAt: source.collected_at,
+        evidenceLevel: source.evidence_level, rawPayloadPath: source.raw_payload_path,
         sourceType: source.source_type,
       })),
       evidence: evidence.map((item) => ({
@@ -117,12 +133,17 @@ export class WorkbenchDatabase {
 
   saveSources(runId: string, sources: CandidateSource[]) {
     const insert = this.db.prepare(`INSERT INTO sources
-      (id, run_id, url, title, author, published_at, read_count, like_count, comment_count, source_type, raw_json)
-      VALUES (@id, @runId, @url, @title, @author, @publishedAt, @readCount, @likeCount, @commentCount, @sourceType, @rawJson)
+      (id, run_id, url, title, author, published_at, read_count, like_count, comment_count, favorite_count,
+       collected_at, evidence_level, raw_payload_path, source_type, raw_json)
+      VALUES (@id, @runId, @url, @title, @author, @publishedAt, @readCount, @likeCount, @commentCount, @favoriteCount,
+       @collectedAt, @evidenceLevel, @rawPayloadPath, @sourceType, @rawJson)
       ON CONFLICT(run_id, id) DO UPDATE SET title=excluded.title, author=excluded.author,
       published_at=excluded.published_at, read_count=excluded.read_count,
-      like_count=excluded.like_count, comment_count=excluded.comment_count, raw_json=excluded.raw_json`);
+      like_count=excluded.like_count, comment_count=excluded.comment_count, favorite_count=excluded.favorite_count,
+      collected_at=excluded.collected_at, evidence_level=excluded.evidence_level,
+      raw_payload_path=excluded.raw_payload_path, raw_json=excluded.raw_json`);
     this.db.transaction(() => sources.forEach((source) => insert.run({
+      favoriteCount: null, collectedAt: null, evidenceLevel: null, rawPayloadPath: null,
       ...source, runId, rawJson: JSON.stringify(source),
     })))();
   }
