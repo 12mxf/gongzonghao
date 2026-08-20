@@ -1,0 +1,52 @@
+[
+  {
+    "url": "https://example.org/public/pet-ct-quality-2026",
+    "title": "PET/CT 检查质量管理：从流程到可追踪指标",
+    "author": "示例医学编辑部",
+    "publishedAt": "2026-07-16T08:00:00.000Z",
+    "readCount": 18600,
+    "likeCount": 832,
+    "commentCount": 96,
+    "summary": "公开演示数据：讨论检查前准备、采集与报告环节的质量控制。"
+  },
+  {
+    "url": "https://example.org/public/pet-ct-patient-preparation",
+    "title": "PET CT 检查前准备中最容易忽略的五个环节",
+    "author": "示例健康科普",
+    "publishedAt": "2026-07-03T09:30:00.000Z",
+    "readCount": 24100,
+    "likeCount": 1090,
+    "commentCount": 142,
+    "summary": "公开演示数据：面向受检者介绍检查前准备。"
+  },
+  {
+    "url": "https://example.org/public/petct-patient-preparation?utm_source=demo",
+    "title": "PET/CT检查前准备：最容易忽略的5个环节",
+    "author": "示例健康科普",
+    "publishedAt": "2026-07-04T09:30:00.000Z",
+    "readCount": 24200,
+    "likeCount": 1103,
+    "commentCount": 144,
+    "summary": "用于验证标题相似去重的演示重复记录。"
+  },
+  {
+    "url": "https://example.org/public/nuclear-medicine-communication",
+    "title": "核医学沟通不是解释术语，而是降低不确定性",
+    "author": "示例临床观察",
+    "publishedAt": "2026-06-21T03:00:00.000Z",
+    "readCount": 12800,
+    "likeCount": 640,
+    "commentCount": 81,
+    "summary": "公开演示数据：从患者路径讨论沟通节点。"
+  },
+  {
+    "url": "https://example.org/public/radiation-protection-facts",
+    "title": "谈辐射防护时，为什么只报一个数字还不够",
+    "author": "示例科普中心",
+    "publishedAt": "2026-05-18T12:00:00.000Z",
+    "readCount": 9700,
+    "likeCount": 511,
+    "commentCount": 65,
+    "summary": "公开演示数据：强调风险沟通的情境与比较基准。"
+  }
+]

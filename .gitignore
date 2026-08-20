@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+logs/
+*.log
+data/raw/*
+!data/raw/.gitkeep
+data/index/*
+!data/index/.gitkeep
+data/image-inbox/
+data/*.sqlite*
+output/
+.DS_Store
+coverage/
+.playwright-cli/

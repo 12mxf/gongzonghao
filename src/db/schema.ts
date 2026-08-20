@@ -1,0 +1,85 @@
+export const schemaStatements = [
+  `CREATE TABLE IF NOT EXISTS runs (
+    id TEXT PRIMARY KEY,
+    keyword TEXT,
+    manual_title TEXT,
+    status TEXT NOT NULL CHECK(status IN ('pending','running','succeeded','failed')),
+    final_title TEXT,
+    draft_media_id TEXT,
+    error_message TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS steps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    ordinal INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('pending','running','succeeded','failed')),
+    attempt INTEGER NOT NULL DEFAULT 0,
+    started_at TEXT,
+    finished_at TEXT,
+    error_code TEXT,
+    error_message TEXT,
+    output_json TEXT,
+    UNIQUE(run_id, name)
+  )`,
+  `CREATE TABLE IF NOT EXISTS sources (
+    id TEXT NOT NULL,
+    run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    url TEXT NOT NULL,
+    title TEXT NOT NULL,
+    author TEXT,
+    published_at TEXT,
+    read_count INTEGER,
+    like_count INTEGER,
+    comment_count INTEGER,
+    source_type TEXT NOT NULL,
+    raw_json TEXT,
+    PRIMARY KEY(run_id, id),
+    UNIQUE(run_id, url)
+  )`,
+  `CREATE TABLE IF NOT EXISTS rag_chunks (
+    id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    author TEXT,
+    content TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    content_hash TEXT NOT NULL UNIQUE
+  )`,
+  `CREATE TABLE IF NOT EXISTS evidence (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    source_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    author TEXT,
+    content TEXT NOT NULL,
+    score REAL NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS content_blocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    stage TEXT NOT NULL,
+    block_key TEXT NOT NULL,
+    content TEXT NOT NULL,
+    source_ids_json TEXT NOT NULL,
+    UNIQUE(run_id, stage, block_key)
+  )`,
+  `CREATE TABLE IF NOT EXISTS artifacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    local_path TEXT,
+    remote_url TEXT,
+    media_id TEXT,
+    metadata_json TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_runs_created_at ON runs(created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_steps_run_status ON steps(run_id, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_sources_run ON sources(run_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_evidence_run_kind ON evidence(run_id, kind)`,
+];
