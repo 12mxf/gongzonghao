@@ -47,7 +47,9 @@ afterEach(() => {
 describe("TikHub 微信公众号搜索适配器", () => {
   it("正常响应：发现文章、补全指标并保存原始证据", async () => {
     const dir = tempDir();
-    vi.stubGlobal("fetch", vi.fn(async (urlValue: string | URL | Request) => {
+    const requests: RequestInit[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (urlValue: string | URL | Request, init?: RequestInit) => {
+      requests.push(init || {});
       const url = String(urlValue);
       if (url.includes("fetch_article_detail")) return Response.json({ data: { title: "AI 写作实战", nickname: "公众号作者", publish_time: 1700000000, digest: "文章摘要" } });
       if (url.includes("fetch_article_stats")) return Response.json({ data: { read_num: 12345, like_num: 88, comment_count: 12, collect_count: 9 } });
@@ -64,6 +66,9 @@ describe("TikHub 微信公众号搜索适配器", () => {
     });
     expect(evidenceLevel(item)).toBe("可比较真实数据");
     expect(fs.existsSync(item.rawPayloadPath!)).toBe(true);
+    expect(requests).toHaveLength(2);
+    expect(requests.every((request) => request.method === "POST")).toBe(true);
+    expect(requests.every((request) => JSON.parse(String(request.body)).raw === true)).toBe(true);
   });
 
   it("空结果：不调用 TikHub，也不伪造热度", async () => {

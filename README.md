@@ -82,7 +82,7 @@ SOGOU_MAX_PAGES=3
 
 每次搜索的原始搜狗页面、TikHub 链接解析、详情和指标响应都会保存到 `output/<runId>/raw/`。候选项按规范化 URL 和 `sourceId` 去重，指标不足时证据等级明确显示“已发现·数据待补”，不会用模型分数冒充真实热度。
 
-注意：对每篇可用公众号直链，项目会调用 TikHub V2 的详情和互动数据接口；当前官方文档标价各 0.01 美元。默认仍是 `demo`，测试使用模拟响应，不会消耗余额。
+注意：对每篇可用公众号直链，项目会使用官方默认的 `raw:true` 调用 TikHub V2 详情和互动数据接口；当前官方文档标价各 0.01 美元。`raw:false` 精简模式在实测中可能返回 HTTP 400。默认仍是 `demo`，测试使用模拟响应，不会消耗余额。
 
 核验依据：[TikHub 官方 Swagger](https://api.tikhub.io)、[实时 OpenAPI 文件](https://api.tikhub.io/openapi.json)。当前实现对应官方 OpenAPI `V5.3.2` 的公众号 V2 接口；GitHub SDK 中的旧 `/wechat_mp/web/*` 路径已不再作为实现依据。
 

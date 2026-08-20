@@ -158,10 +158,10 @@ export class TikHubWechatSearchProvider implements SearchProvider {
       }
       const url = article.articleUrl;
 
-      const detail = await this.call("/api/v1/wechat_mp/v2/fetch_article_detail", { url, raw: false });
+      const detail = await this.call("/api/v1/wechat_mp/v2/fetch_article_detail", { url, raw: true });
       const detailPath = path.join(rawDir, `${prefix}-detail.json`);
       await fs.writeFile(detailPath, JSON.stringify(detail, null, 2));
-      const metrics = await this.call("/api/v1/wechat_mp/v2/fetch_article_stats", { url, raw: false });
+      const metrics = await this.call("/api/v1/wechat_mp/v2/fetch_article_stats", { url, raw: true });
       await fs.writeFile(path.join(rawDir, `${prefix}-metrics.json`), JSON.stringify(metrics, null, 2));
 
       const publishedAt = dateValue(detail) || article.publishedAt;
