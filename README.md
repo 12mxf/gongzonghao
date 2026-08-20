@@ -73,17 +73,18 @@ RSS 适配器只读取明确配置的地址，不绕过登录、不抓取受限�
 DATA_SOURCE_MODE=tikhub
 DATA_PROVIDER_KEY=你的TikHub密钥
 TIKHUB_BASE_URL=https://api.tikhub.dev
+TIKHUB_SEED_URLS=https://mp.weixin.qq.com/s/文章ID
 SEARCH_RESULT_LIMIT=20
 SOGOU_MAX_PAGES=3
 ```
 
-这里是两段式证据链：搜狗微信公开结果负责“按关键词发现”，TikHub 负责“搜狗链接转公众号永久链接、文章详情、阅读互动指标”。TikHub 当前公开的公众号 OpenAPI 没有任意关键词搜索接口，因此项目不会把 URL 解析接口伪装成搜索接口。中国大陆按官方说明使用 `api.tikhub.dev`，其他地区可改为 `https://api.tikhub.io`。
+这里是两段式证据链：搜狗微信公开结果负责“按关键词发现”；拿到公众号直链后，TikHub V2 负责文章详情和阅读互动指标。TikHub 当前公开的公众号 OpenAPI 没有任意关键词搜索接口，旧版搜狗链接转换接口也已下线，因此搜狗候选暂时标记“数据待补”，不会被伪装成已获取真实指标。你也可以把已知公众号文章直链配置到 `TIKHUB_SEED_URLS` 进行指标补全。中国大陆按官方说明使用 `api.tikhub.dev`，其他地区可改为 `https://api.tikhub.io`。
 
 每次搜索的原始搜狗页面、TikHub 链接解析、详情和指标响应都会保存到 `output/<runId>/raw/`。候选项按规范化 URL 和 `sourceId` 去重，指标不足时证据等级明确显示“已发现·数据待补”，不会用模型分数冒充真实热度。
 
-注意：切换到 `DATA_SOURCE_MODE=tikhub` 后，每篇候选通常会调用 TikHub 的链接解析、详情和阅读指标接口，可能产生费用。默认仍是 `demo`，测试使用模拟响应，不会消耗余额。
+注意：对每篇可用公众号直链，项目会调用 TikHub V2 的详情和互动数据接口；当前官方文档标价各 0.01 美元。默认仍是 `demo`，测试使用模拟响应，不会消耗余额。
 
-核验依据：[TikHub 官方 Swagger](https://api.tikhub.io)、[官方 SDK 接口索引](https://github.com/TikHub/TikHub-API-Python-SDK/blob/main/docs/reference.md)、[官方 OpenAPI 文件](https://github.com/TikHub/TikHub-API-Python-SDK/blob/main/spec/openapi.json)。当前实现对应官方 OpenAPI `V5.3.2` 的公众号 Web 接口。
+核验依据：[TikHub 官方 Swagger](https://api.tikhub.io)、[实时 OpenAPI 文件](https://api.tikhub.io/openapi.json)。当前实现对应官方 OpenAPI `V5.3.2` 的公众号 V2 接口；GitHub SDK 中的旧 `/wechat_mp/web/*` 路径已不再作为实现依据。
 
 ### 本地知识库
 

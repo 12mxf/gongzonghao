@@ -9,17 +9,20 @@ type JsonObject = Record<string, unknown>;
 interface TikHubProviderOptions {
   apiKey: string;
   baseUrl: string;
+  seedUrls: string[];
   outputDir: string;
   maxSogouPages: number;
   http: HttpClient;
 }
 
 interface DiscoveredArticle {
-  sogouUrl: string;
+  sogouUrl?: string;
+  articleUrl?: string;
   title: string;
   author?: string;
   publishedAt?: string;
   summary?: string;
+  rawPayloadPath?: string;
 }
 
 function decodeHtml(value: string) {
@@ -104,11 +107,6 @@ function dateValue(root: unknown) {
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
-function permanentUrl(root: unknown) {
-  const candidate = textValue(root, ["article_url", "permanent_url", "mp_url", "url"]);
-  return candidate && /^https?:\/\//.test(candidate) ? normalizeSourceUrl(candidate) : undefined;
-}
-
 export class TikHubWechatSearchProvider implements SearchProvider {
   constructor(private readonly options: TikHubProviderOptions) {}
 
@@ -116,10 +114,13 @@ export class TikHubWechatSearchProvider implements SearchProvider {
     if (!this.options.apiKey) throw new Error("DATA_PROVIDER_KEY 未配置；TikHub 仅从环境变量读取密钥");
     const rawDir = path.join(this.options.outputDir, input.runId, "raw");
     await fs.mkdir(rawDir, { recursive: true });
-    const discovered: DiscoveredArticle[] = [];
+    const discovered: DiscoveredArticle[] = this.options.seedUrls.map((articleUrl) => ({
+      articleUrl: normalizeSourceUrl(articleUrl),
+      title: "公众号文章（详情待补）",
+    }));
     const pages = Math.min(this.options.maxSogouPages, Math.max(1, Math.ceil(input.limit / 10)));
 
-    for (let page = 1; page <= pages && discovered.length < input.limit; page += 1) {
+    for (let page = 1; this.options.seedUrls.length === 0 && page <= pages && discovered.length < input.limit; page += 1) {
       const url = new URL("https://weixin.sogou.com/weixin");
       url.searchParams.set("type", "2");
       url.searchParams.set("query", input.keyword);
@@ -129,8 +130,9 @@ export class TikHubWechatSearchProvider implements SearchProvider {
         headers: { "user-agent": "Mozilla/5.0 (compatible; ContentWorkbench/0.2; local research tool)" },
       }, { adapter: "sogou_wechat", page });
       const html = await response.text();
-      await fs.writeFile(path.join(rawDir, `sogou-page-${page}.html`), html);
-      const pageItems = parseSogouWechatResults(html);
+      const pagePath = path.join(rawDir, `sogou-page-${page}.html`);
+      await fs.writeFile(pagePath, html);
+      const pageItems = parseSogouWechatResults(html).map((item) => ({ ...item, rawPayloadPath: pagePath }));
       if (!pageItems.length) break;
       discovered.push(...pageItems);
     }
@@ -138,20 +140,28 @@ export class TikHubWechatSearchProvider implements SearchProvider {
     const items: SearchItem[] = [];
     for (const [index, article] of discovered.slice(0, input.limit).entries()) {
       const prefix = String(index + 1).padStart(3, "0");
-      const resolved = await this.call("/api/v1/wechat_mp/web/fetch_mp_article_url", { sogou_url: article.sogouUrl });
-      const resolvedPath = path.join(rawDir, `${prefix}-url.json`);
-      await fs.writeFile(resolvedPath, JSON.stringify(resolved, null, 2));
-      const url = permanentUrl(resolved);
-      if (!url) continue;
+      if (!article.articleUrl) {
+        const url = article.sogouUrl || "";
+        items.push({
+          source: "sogou-wechat",
+          sourceId: sourceIdFor("sogou", url),
+          url,
+          title: article.title,
+          author: article.author,
+          publishedAt: article.publishedAt,
+          collectedAt: new Date().toISOString(),
+          metrics: {},
+          rawText: article.summary,
+          rawPayloadPath: article.rawPayloadPath,
+        });
+        continue;
+      }
+      const url = article.articleUrl;
 
-      const detail = await this.call("/api/v1/wechat_mp/web/fetch_mp_article_detail_json", { url });
+      const detail = await this.call("/api/v1/wechat_mp/v2/fetch_article_detail", { url, raw: false });
       const detailPath = path.join(rawDir, `${prefix}-detail.json`);
       await fs.writeFile(detailPath, JSON.stringify(detail, null, 2));
-      const commentId = textValue(detail, ["comment_id", "commentid"]);
-      const metrics = await this.call("/api/v1/wechat_mp/web/fetch_mp_article_read_count", {
-        url,
-        comment_id: commentId || "",
-      });
+      const metrics = await this.call("/api/v1/wechat_mp/v2/fetch_article_stats", { url, raw: false });
       await fs.writeFile(path.join(rawDir, `${prefix}-metrics.json`), JSON.stringify(metrics, null, 2));
 
       const publishedAt = dateValue(detail) || article.publishedAt;
@@ -178,11 +188,16 @@ export class TikHubWechatSearchProvider implements SearchProvider {
     return dedupeSearchItems(items);
   }
 
-  private async call(endpoint: string, params: Record<string, string>) {
+  private async call(endpoint: string, params: Record<string, unknown>) {
     const url = new URL(endpoint, this.options.baseUrl);
-    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
     const response = await this.options.http.request(url.toString(), {
-      headers: { authorization: `Bearer ${this.options.apiKey}`, accept: "application/json" },
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${this.options.apiKey}`,
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(params),
     }, { adapter: "tikhub", endpoint });
     const payload: unknown = await response.json();
     return asObject(payload) || { data: payload };

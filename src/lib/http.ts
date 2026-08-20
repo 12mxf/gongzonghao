@@ -7,6 +7,22 @@ export interface HttpClientOptions {
   retryBaseDelayMs?: number;
 }
 
+class NonRetryableHttpError extends Error {}
+
+async function safeHttpError(response: Response) {
+  const status = `HTTP ${response.status}`;
+  try {
+    const payload = JSON.parse(await response.text()) as Record<string, unknown>;
+    const detail = payload.detail && typeof payload.detail === "object" ? payload.detail as Record<string, unknown> : payload;
+    const value = detail.message_zh || detail.message || (typeof detail.detail === "string" ? detail.detail : undefined);
+    if (typeof value !== "string") return status;
+    const sanitized = value.replace(/Bearer\s+[^\s"']+/gi, "Bearer [REDACTED]").slice(0, 500);
+    return `${status}: ${sanitized}`;
+  } catch {
+    return status;
+  }
+}
+
 export class HttpClient {
   constructor(private readonly options: HttpClientOptions) {}
 
@@ -20,11 +36,12 @@ export class HttpClient {
         if (!response.ok && (response.status >= 500 || response.status === 429)) {
           throw new Error(`HTTP ${response.status}`);
         }
-        if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        if (!response.ok) throw new NonRetryableHttpError(await safeHttpError(response));
         clearTimeout(timer);
         return response;
       } catch (error) {
         clearTimeout(timer);
+        if (error instanceof NonRetryableHttpError) throw error;
         lastError = error;
         this.options.logger.warn("external_request_retry", {
           ...context, url: new URL(url).origin, attempt,

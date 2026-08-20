@@ -20,6 +20,7 @@ export function loadConfig(overrides: Partial<Record<string, string>> = {}) {
     rssFeeds: (env.PUBLIC_RSS_FEEDS || "").split(",").map((v) => v.trim()).filter(Boolean),
     dataProviderKey: env.DATA_PROVIDER_KEY || "",
     tikhubBaseUrl: env.TIKHUB_BASE_URL || "https://api.tikhub.dev",
+    tikhubSeedUrls: (env.TIKHUB_SEED_URLS || "").split(",").map((v) => v.trim()).filter(Boolean),
     searchResultLimit: Math.max(1, Math.min(50, Number(env.SEARCH_RESULT_LIMIT || 20))),
     sogouMaxPages: Math.max(1, Math.min(5, Number(env.SOGOU_MAX_PAGES || 3))),
     httpTimeoutMs: Number(env.HTTP_TIMEOUT_MS || 10_000),

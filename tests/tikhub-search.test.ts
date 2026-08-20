@@ -24,12 +24,13 @@ function sogouHtml() {
   </div></li></ul>`;
 }
 
-function provider(outputDir: string, maxRetries = 3) {
+function provider(outputDir: string, maxRetries = 3, seedUrls: string[] = []) {
   const logger = new StructuredLogger(path.join(outputDir, "logs"));
   const http = new HttpClient({ timeoutMs: 1_000, maxRetries, retryBaseDelayMs: 1, logger });
   return new TikHubWechatSearchProvider({
     apiKey: "test-only-token",
     baseUrl: "https://api.tikhub.dev",
+    seedUrls,
     outputDir,
     maxSogouPages: 2,
     http,
@@ -48,14 +49,12 @@ describe("TikHub 微信公众号搜索适配器", () => {
     const dir = tempDir();
     vi.stubGlobal("fetch", vi.fn(async (urlValue: string | URL | Request) => {
       const url = String(urlValue);
-      if (url.startsWith("https://weixin.sogou.com")) return new Response(sogouHtml());
-      if (url.includes("fetch_mp_article_url?")) return Response.json({ code: 200, data: { article_url: "https://mp.weixin.qq.com/s/example?scene=1" } });
-      if (url.includes("fetch_mp_article_detail_json?")) return Response.json({ data: { title: "AI 写作实战", nickname: "公众号作者", publish_time: 1700000000, comment_id: "c-1", digest: "文章摘要" } });
-      if (url.includes("fetch_mp_article_read_count?")) return Response.json({ data: { read_num: 12345, like_num: 88, comment_count: 12, collect_count: 9 } });
+      if (url.includes("fetch_article_detail")) return Response.json({ data: { title: "AI 写作实战", nickname: "公众号作者", publish_time: 1700000000, digest: "文章摘要" } });
+      if (url.includes("fetch_article_stats")) return Response.json({ data: { read_num: 12345, like_num: 88, comment_count: 12, collect_count: 9 } });
       return new Response("not found", { status: 404 });
     }));
 
-    const [item] = await provider(dir).search(input);
+    const [item] = await provider(dir, 3, ["https://mp.weixin.qq.com/s/example?scene=1"]).search(input);
     expect(item).toMatchObject({
       source: "tikhub-wechat-mp",
       url: "https://mp.weixin.qq.com/s/example",
@@ -64,7 +63,6 @@ describe("TikHub 微信公众号搜索适配器", () => {
       metrics: { views: 12345, likes: 88, comments: 12, favorites: 9 },
     });
     expect(evidenceLevel(item)).toBe("可比较真实数据");
-    expect(fs.existsSync(path.join(dir, input.runId, "raw", "sogou-page-1.html"))).toBe(true);
     expect(fs.existsSync(item.rawPayloadPath!)).toBe(true);
   });
 
@@ -78,34 +76,55 @@ describe("TikHub 微信公众号搜索适配器", () => {
 
   it("429 限流：按指数退避重试后成功", async () => {
     const dir = tempDir();
-    let resolveAttempts = 0;
+    let detailAttempts = 0;
     vi.stubGlobal("fetch", vi.fn(async (urlValue: string | URL | Request) => {
       const url = String(urlValue);
-      if (url.startsWith("https://weixin.sogou.com")) return new Response(sogouHtml());
-      if (url.includes("fetch_mp_article_url?")) {
-        resolveAttempts += 1;
-        if (resolveAttempts === 1) return new Response("rate limited", { status: 429 });
-        return Response.json({ data: { url: "https://mp.weixin.qq.com/s/retried" } });
+      if (url.includes("fetch_article_detail")) {
+        detailAttempts += 1;
+        if (detailAttempts === 1) return new Response("rate limited", { status: 429 });
+        return Response.json({ data: { title: "重试成功" } });
       }
-      if (url.includes("fetch_mp_article_detail_json?")) return Response.json({ data: { title: "重试成功" } });
       return Response.json({ data: { read_count: 1 } });
     }));
-    const items = await provider(dir).search(input);
-    expect(resolveAttempts).toBe(2);
+    const items = await provider(dir, 3, ["https://mp.weixin.qq.com/s/retried"]).search(input);
+    expect(detailAttempts).toBe(2);
     expect(items[0].title).toBe("重试成功");
   });
 
   it("字段缺失：保留发现证据并明确标记数据待补", async () => {
     const dir = tempDir();
     vi.stubGlobal("fetch", vi.fn(async (urlValue: string | URL | Request) => {
-      const url = String(urlValue);
-      if (url.startsWith("https://weixin.sogou.com")) return new Response(sogouHtml());
-      if (url.includes("fetch_mp_article_url?")) return Response.json({ data: { url: "https://mp.weixin.qq.com/s/missing" } });
       return Response.json({ code: 200, data: {} });
     }));
-    const [item] = await provider(dir).search(input);
-    expect(item.title).toBe("AI 写作实战");
+    const [item] = await provider(dir, 3, ["https://mp.weixin.qq.com/s/missing"]).search(input);
+    expect(item.title).toBe("公众号文章（详情待补）");
     expect(item.metrics).toEqual({ views: undefined, likes: undefined, comments: undefined, favorites: undefined });
     expect(evidenceLevel(item)).toBe("已发现·数据待补");
+  });
+
+  it("402 不重试，且错误响应回显的 Authorization 不进入错误文本", async () => {
+    const dir = tempDir();
+    const fetchMock = vi.fn(async () => Response.json({
+      detail: {
+        message_zh: "余额不足",
+        headers: { Authorization: "Bearer test-only-token" },
+      },
+    }, { status: 402 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(provider(dir, 3, ["https://mp.weixin.qq.com/s/paid"]).search(input)).rejects.toThrow("HTTP 402: 余额不足");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const logPath = path.join(dir, "logs", "workbench.ndjson");
+    const logText = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "";
+    expect(logText).not.toContain("test-only-token");
+  });
+
+  it("搜狗候选无法转换时保留发现证据，不调用已下线接口", async () => {
+    const dir = tempDir();
+    const fetchMock = vi.fn(async () => new Response(sogouHtml()));
+    vi.stubGlobal("fetch", fetchMock);
+    const [item] = await provider(dir).search(input);
+    expect(item).toMatchObject({ source: "sogou-wechat", title: "AI 写作实战", metrics: {} });
+    expect(evidenceLevel(item)).toBe("已发现·数据待补");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

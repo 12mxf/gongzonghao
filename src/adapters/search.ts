@@ -58,6 +58,7 @@ export class TikHubSearchAdapter implements SearchAdapter {
     this.provider = new TikHubWechatSearchProvider({
       apiKey: config.dataProviderKey,
       baseUrl: config.tikhubBaseUrl,
+      seedUrls: config.tikhubSeedUrls,
       outputDir: config.outputDir,
       maxSogouPages: config.sogouMaxPages,
       http,
